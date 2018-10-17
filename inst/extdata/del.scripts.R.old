@@ -1,0 +1,206 @@
+
+
+##----------------------------------------------------------------------------##
+# zk-panx-20181005
+#
+# change sample names
+#
+# C2: Panx-control (change: Panx-IP)
+# D2: Panx-control
+# F2: Panx-IP
+# G2: Panx-IP (change: Panx-control)
+#
+overwrite <- FALSE
+f3 <- "data/20181005_zk_panx/20181005-zk-panx.scores.txt"
+f3x <- "data/20181005_zk_panx/ip-ms_panx.matrix.txt"
+fout <- "results/20181005_zk_panx/ip-ms_zk_panx.xlsx"
+fpdf <- "results/20181005_zk_panx/ip-ms_zk_panx.volcano.pdf"
+df <- readr::read_delim(f3, "\t", col_types = cols(), skip = 1, col_names = FALSE)
+if (file.exists(f3x) & ! isTRUE(overwrite)) {
+  counts <- read.table(f3x, header = TRUE, sep = "\t")
+} else {
+  tags <- c("ctl_1", "ctl_2", "exp_1", "exp_2")
+  counts <- dplyr::select(df, X1, X10, X11, X13, X14)
+  names(counts) <- c("id", tags)
+  counts$label <- Convert_id(counts$id)
+  counts <- as.data.frame(counts)
+  rownames(counts) <- paste0(counts$label, "_", counts$id)
+  counts <- counts[, tags]
+  write.table(counts, f3x, sep = "\t", row.names = TRUE)
+}
+
+# remove NA values
+# counts[is.na(counts)] <- 0.01 #
+dfx <- counts[complete.cases(counts), ]
+
+# de analysis, limma-trend
+df2 <- ms_de(dfx)
+
+# add label
+df2$label <- row.names(df2)
+df2 <- tidyr::separate(df2, label, c("label", "id"), sep = "_")
+
+# add label in plot
+df2_label <- dplyr::filter(df2, label %in% c("Panx", "nxf2", "piwi", "Nxt1", "sbr"))
+
+# make plot
+p <- volcano_plot(df2, df2_label)
+p <- p +
+  scale_y_continuous(breaks = seq(0, .05, .05),
+                     labels = seq(0, .05, .05),
+                     limits = c(0, .05)) +
+  scale_x_continuous(breaks = seq(-4, 4, 2),
+                     labels = seq(-4, 4, 2),
+                     limits = c(-4, 4))
+
+
+##-------------------------------------------------------##
+## Change sample names
+# change sample names
+#
+# C2: Panx-control (change: Panx-IP)
+# D2: Panx-control
+# F2: Panx-IP
+# G2: Panx-IP (change: Panx-control)
+#
+tags <- c("ctl_1", "ctl_2", "exp_1", "exp_2")
+counts <- dplyr::select(df, X1, X11, X14, X10, X13)
+names(counts) <- c("id", tags)
+counts$label <- Convert_id(counts$id)
+counts <- as.data.frame(counts)
+rownames(counts) <- paste0(counts$label, "_", counts$id)
+counts <- counts[, tags]
+
+# remove NA values
+# counts[is.na(counts)] <- 0.01 #
+dfx <- counts[complete.cases(counts), ]
+
+# de analysis, limma-trend
+df2 <- ms_de(dfx)
+
+# add label
+df2$label <- row.names(df2)
+df2 <- tidyr::separate(df2, label, c("label", "id"), sep = "_")
+
+# add label in plot
+df2_label <- dplyr::filter(df2, label %in% c("Panx", "nxf2", "piwi", "Nxt1", "sbr"))
+
+# make plot
+p2 <- volcano_plot(df2, df2_label)
+p2 <- p2 +
+  scale_y_continuous(breaks = seq(0, 2, 1),
+                     labels = seq(0, 2, 1),
+                     limits = c(0, 2)) +
+  scale_x_continuous(breaks = seq(-10, 10, 2),
+                     labels = seq(-10, 10, 2),
+                     limits = c(-10, 10))
+
+
+figureLegend <- "Figure. Volcano plots showing enrichment values and corresponding significance levels
+(for proteins co-purifying with Panx).
+a, Panx-Control are C2 and D2, Panx-IP are F2 and G2;
+
+b, sample names changed, Panx-Control are D2 and G2, Panx-IP are C2 and F2."
+
+library(cowplot)
+if(! dir.exists(dirname(fpdf))) {
+  dir.create(dirname(fpdf))
+}
+pdf(fpdf, width = 5.5, height = 6, paper = "a4")
+pg1 <- cowplot::plot_grid(p, p2, NULL, NULL, align = "hv", ncol = 2, labels = "auto")
+pg2 <- cowplot::add_sub(pg1, figureLegend, x = 0, hjust = 0, size = 10)
+cowplot::ggdraw(pg2)
+dev.off()
+
+# # merge data.frame
+# library(xlsx)
+# dd1 <- dplyr::select(df, 1, 14, 26, 10, 22)
+# colnames(dd1) <- c("id", "ctl_1", "ctl_2", "exp_1", "exp_2")
+# dd2 <- merge(dd1, df2, by = "id")
+# dd2 <- dd2[order(-dd2$logFC), ]
+# xlsx::write.xlsx(dd2, fout, row.names = FALSE)
+#
+#
+
+
+
+##----------------------------------------------------------------------------##
+# zk-panx-20181005 + zk-panx-20180927
+#
+f2 <- "data/20180927_zk_panx/A_CONTROL B_TEST.txt"
+f3 <- "data/20181005_zk_panx/20181005-zk-panx.scores.txt"
+df2 <- readr::read_delim(f2, "\t", col_types = cols(), skip = 1, col_names = FALSE)
+df3 <- readr::read_delim(f3, "\t", col_types = cols(), skip = 1, col_names = FALSE)
+
+# zk-panx-20180927
+cnt1 <- dplyr::select(df2, X1, X8, X9)
+names(cnt1) <- c("id", "ctl_1", "exp_1")
+#
+# # zk-panx-20181005
+# tags <- c("ctl_2", "ctl_3", "exp_2", "exp_3")
+# cnt2 <- dplyr::select(df3, X1, X10, X11, X13, X14)
+# names(cnt2) <- c("id", tags)
+
+# zk-panx-20181005
+tags <- c("ctl_2", "exp_2")
+cnt2 <- dplyr::select(df, X1, X11, X13)
+names(cnt2) <- c("id", tags)
+
+# merge
+cnt3 <- merge(cnt1, cnt2, by = "id", all.x = TRUE)
+# cnt3 <- cnt3[, c("id", "ctl_1", "ctl_2", "ctl_3", "exp_1", "exp_2", "exp_3")]
+cnt3 <- cnt3[, c("id", "ctl_1", "ctl_2", "exp_1", "exp_2")]
+
+# labels
+cnt3$label <- Convert_id(cnt3$id)
+cnt3 <- as.data.frame(cnt3)
+rownames(cnt3) <- paste0(cnt3$label, "_", cnt3$id)
+# cnt3 <- cnt3[, c("ctl_1", "ctl_2", "ctl_3", "exp_1", "exp_2", "exp_3")]
+cnt3 <- cnt3[, c("ctl_1", "ctl_2", "exp_1", "exp_2")]
+
+# remove NA values
+# counts[is.na(counts)] <- 0.01 #
+# dfx <- cnt3[complete.cases(cnt3), ]
+cnt3[is.na(cnt3)] <- 0.01
+dfx <- cnt3
+
+# de analysis, limma-trend
+df2 <- ms_de(dfx)
+
+# add label
+df2$label <- row.names(df2)
+df2 <- tidyr::separate(df2, label, c("label", "id"), sep = "_")
+
+# add label in plot
+# df2_label <- dplyr::filter(df2, label %in% c("Panx", "nxf2", "piwi", "Nxt1", "sbr"))
+df2_label <- dplyr::filter(df2, label %in% c("Panx", "nxf2"))
+
+# make plot
+p2 <- volcano_plot(df2, df2_label)
+p2 <- p2 +
+  scale_y_continuous(breaks = seq(0, 2, 1),
+                     labels = seq(0, 2, 1),
+                     limits = c(0, 2)) +
+  scale_x_continuous(breaks = seq(-20, 20, 5),
+                     labels = seq(-20, 20, 5),
+                     limits = c(-20, 20))
+
+
+figureLegend <- "Figure. Volcano plots showing enrichment values and corresponding significance levels
+(for proteins co-purifying with Panx).
+combine IP-MS data from 20180927 and 20181005, a total of 3 replicates for
+control and IP samples, respectively."
+
+library(cowplot)
+fpdf <- "results/20181005_zk_panx/ip-2replicates-ms_zk_panx.volcano.pdf"
+pdf(fpdf, width = 5.5, height = 6, paper = "a4")
+pg1 <- cowplot::plot_grid(p2, NULL, NULL, NULL, align = "hv", ncol = 2, labels = "auto")
+pg2 <- cowplot::add_sub(pg1, figureLegend, x = 0, hjust = 0, size = 10)
+cowplot::ggdraw(pg2)
+dev.off()
+
+
+
+
+
+
