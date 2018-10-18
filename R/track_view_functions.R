@@ -186,11 +186,22 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
   stopifnot(is.logical(exclude))
 
   # all seqnames in x
-  n <- as.character(seqnames(x))
+  n <- as.character(droplevels(seqnames(x)))
+
+  # checkpoint, if x is empty
+  if (length(n) == 0) {
+    return(NULL)
+  }
 
   # subset seqnames
   n0 <- n[! n %in% g]
   n1 <- n[n %in% g]
+
+  # checkpoint, if g is not in x
+  if (identical(n1, character(0))) {
+    return(NULL)
+  }
+
 
   # subset GRanges
   if (isTRUE(exclude)) {
@@ -202,7 +213,8 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
   }
 
   # GRanges object, drop levels
-  x1 <- x[seqnames(x) %in% hit]
+  # x1 <- x[seqnames(x) == hit]
+  x1 <- x[x@seqnames %in% hit] # !!! %in% now working
   x1 <- dropSeqlevels(x1, hit_null, pruning.mode = "coarse")
 
   return(x1)
@@ -338,7 +350,11 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
     # ctl sample
     if (is(gr_bw, "GRanges")) {
       gr_hit <- GRanges_seqname_picker(gr_bw, i_name)
-      gr_df  <- GRanges_to_data.frame(gr_hit)
+      if (is.null(gr_hit)) {
+        gr_df <- empty_df
+      } else {
+        gr_df  <- GRanges_to_data.frame(gr_hit)
+      }
     } else {
       gr_df  <- empty_df
     }
@@ -392,17 +408,18 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
     hits <- chr_all
   } else if (all(is.character(n))) {
     # filt by chr names, for TE only
-    dfx <- as.data.frame(chr_all)
-    dfx_names <- rownames(dfx)
-    dfx_chrs  <- as.character(dfx$seqnames)
-    # overlap
-    h1   <- dfx[dfx_names %in% n, ]
-    h2   <- dfx[dfx_chrs %in% n, ]
-    chr_hits <- rbind.data.frame(h1, h2)$seqnames
-    chr_hits <- as.character(droplevels(chr_hits))
-    hits <- GRanges_seqname_picker(chr_all, chr_hits)
+    dfx <- tibble::rownames_to_column(as.data.frame(chr_all), "name")
+    stopifnot(all(c("seqnames", "name") %in% names(dfx)))
+    dfx_hits <- dplyr::filter(dfx, seqnames %in% n | name %in% n)
+    chr_hits <- as.character(droplevels(dfx_hits$seqnames))
+    hits     <- GRanges_seqname_picker(chr_all, g = chr_hits)
   } else {
     stop("unknown type of argument, n=")
+  }
+
+  # checkpoint
+  if (is.null(hits)) {
+    stop("records not found in fasize, check n= option")
   }
 
   # the seqnames of hits
@@ -442,12 +459,17 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
                            strand   = factor(),
                            name     = factor(),
                            y        = integer(),
-                           sample   = character(),
+                           sample   = factor(),
                            stringsAsFactors = FALSE)
     # ctl sample
     if (is(ctl_gr_bw, "GRanges")) {
       ctl_gr_hit <- GRanges_seqname_picker(ctl_gr_bw, i_name)
-      ctl_gr_df  <- GRanges_to_data.frame(ctl_gr_hit)
+      if (is.null(ctl_gr_hit)) {
+        ctl_gr_df <- empty_df
+      } else {
+        ctl_gr_df  <- GRanges_to_data.frame(ctl_gr_hit)
+      }
+      # add label to smaple
       if (nrow(ctl_gr_df) > 0) {
         ctl_gr_df$sample <- ctl_label
       }
@@ -458,7 +480,12 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
     # tre sample
     if (is(tre_gr_bw, "GRanges")) {
       tre_gr_hit <- GRanges_seqname_picker(tre_gr_bw, i_name)
-      tre_gr_df <- GRanges_to_data.frame(tre_gr_hit)
+      if (is.null(tre_gr_hit)) {
+        tre_gr_df <- empty_df
+      } else {
+        tre_gr_df  <- GRanges_to_data.frame(tre_gr_hit)
+      }
+      # add label to smaple
       if (nrow(tre_gr_df) > 0) {
         tre_gr_df$sample <- tre_label
       }
@@ -468,6 +495,9 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
 
     # merge data.frame
     gr_df <- rbind.data.frame(ctl_gr_df, tre_gr_df)
+
+    # set levels
+    gr_df$sample <- factor(gr_df$sample, levels = c(ctl_label, tre_label))
 
     # report data.frame
     return(gr_df)
@@ -590,7 +620,8 @@ coverage_plot_dual <- function(data, fill.color = c("orange", "red2")) {
 
   # number of records of data
   if (nrow(data) == 0) {
-    stop("empty data.frame in input")
+    warning("empty data.frame in input")
+    return(NULL)
   }
 
   # number of names
@@ -683,7 +714,7 @@ plot_n_pages <- function(plotlist = NULL, nrow = 2, ncol = 5,
     idx <- page_index[[n]]
     idx_plist <- plots[idx]
     pg <- cowplot::plot_grid(plotlist = idx_plist, align = "hv",
-                             nrow = nrow, ncol = ncol, label_colour = "AUTO")
+                             nrow = nrow, ncol = ncol, labels = "AUTO")
     print(cowplot::ggdraw(pg))
   }
   dev.off()
@@ -691,3 +722,5 @@ plot_n_pages <- function(plotlist = NULL, nrow = 2, ncol = 5,
   # return the pdf filename
   return(pdf_out)
 }
+
+# EOF
