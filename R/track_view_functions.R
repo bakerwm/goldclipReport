@@ -52,11 +52,15 @@
 #' @param y path to a bigWig file, to normalize x, generally, the Input
 #'   sample of ChIP-seq, default NULL
 #'
-#' @param filter GRanges object, to filt the bigWig records
+#' @param which GRanges object, subset of bigWig records
+#'
+#' @param normalize.to.y logical, whether normalize IP to Input bigWig
 #'
 #' @import rtracklayer
 #' @import trackViewer
 #' @import dplyr
+#'
+#' @export
 #'
 bw_reader <- function(x, y = NULL, which = NULL, normalize.to.y = FALSE) {
   stopifnot(file.exists(x))
@@ -111,7 +115,6 @@ bw_reader <- function(x, y = NULL, which = NULL, normalize.to.y = FALSE) {
       }
     }
   }
-  # return
   return(bw)
 }
 
@@ -125,6 +128,13 @@ bw_reader <- function(x, y = NULL, which = NULL, normalize.to.y = FALSE) {
 #' @param x path or file to the fasize, at least two columns
 #'
 #' @param to_GRanges logical, whether convert to GRanges object, defult: FALSE
+#'
+#' @import dplyr
+#' @import readr
+#' @import tidyr
+#' @import GenomicRanges
+#'
+#' @export
 #'
 fasize_reader <- function(x, to_GRanges = FALSE) {
   stopifnot(file.exists(x))
@@ -159,7 +169,6 @@ fasize_reader <- function(x, to_GRanges = FALSE) {
   } else {
     out <- df2
   }
-  # report
   return(out)
 }
 
@@ -171,11 +180,10 @@ fasize_reader <- function(x, to_GRanges = FALSE) {
 #'
 #' @param g a list of chromosome names to extract
 #'
-#' @param exclude logical, whether to include input chromosome names, if TRUE,
-#'   exclue the list. if FALSE, only extract the indicated chromosomes,
-#'   default: FALSE
+#' @param exclude logical, whether extract or exclude the specific chromosome
+#'   names from bigWig file. default: FALSE
 #'
-#' @import GRanges
+#' @import GenomicRanges
 #' @import dplyr
 #'
 #' @export
@@ -186,11 +194,21 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
   stopifnot(is.logical(exclude))
 
   # all seqnames in x
-  n <- as.character(seqnames(x))
+  n <- as.character(droplevels(GenomicRanges::seqnames(x)))
+
+  # checkpoint, if x is empty
+  if (length(n) == 0) {
+    return(NULL)
+  }
 
   # subset seqnames
   n0 <- n[! n %in% g]
   n1 <- n[n %in% g]
+
+  # checkpoint, if g is not in x
+  if (identical(n1, character(0))) {
+    return(NULL)
+  }
 
   # subset GRanges
   if (isTRUE(exclude)) {
@@ -202,7 +220,8 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
   }
 
   # GRanges object, drop levels
-  x1 <- x[seqnames(x) %in% hit]
+  # x1 <- x[seqnames(x) == hit]
+  x1 <- x[as.character(x@seqnames) %in% hit] # !!! %in% now working
   x1 <- dropSeqlevels(x1, hit_null, pruning.mode = "coarse")
 
   return(x1)
@@ -216,7 +235,7 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
 #'
 #' @param x GRanges object, require extra column "score"
 #'
-#' @import GRanges
+#' @import GenomicRanges
 #' @import dplyr
 #'
 #' @export
@@ -260,22 +279,23 @@ GRanges_to_data.frame <- function(x) {
 
 
 
-#' extract data.frame from bigWig files of ChIP-seq
+#' read bigWig files and return in data.frame format
 #'
 #' @param ip_bw the bigWig file of IP sampels of ChIP-seq experiment
 #'
-#' @param input_bw the bigWig file of Input samples of ChIP-seq experiment
-#'
 #' @param fasize the chromosome size file of the bigWig, tab separated
 #'
-#' @param n a list of chromosomes to extract from the bigWig files,
-#'   default: all
+#' @param input_bw the bigWig file of Input samples of ChIP-seq experiment
 #'
-#' @import GRanges
+#' @param n array or logical, a list of chromosomes from the bigWig files, or
+#'   all chromosomes. default: TRUE
+#'
+#' @import GenomicRanges
 #' @import rtracklayer
 #' @import dplyr
 #'
-#' @example  n <- c("FBgn0000199_blood") n <- c("297", "FBgn0000199_blood")
+#' @example  n <- c("FBgn0000199_blood")
+#' @example  n <- c("297", "FBgn0000199_blood")
 #'
 #' @export
 #'
@@ -289,12 +309,12 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
     hits <- chr_all
   } else if (all(is.character(n))) {
     # filt by chr names, for TE only
-    dfx <- as.data.frame(chr_all)
+    dfx <- BiocGenerics::as.data.frame(chr_all)
     dfx_names <- rownames(dfx)
     dfx_chrs  <- as.character(dfx$seqnames)
     # overlap
-    h1   <- dfx[dfx_names %in% n, ]
-    h2   <- dfx[dfx_chrs %in% n, ]
+    h1 <- dfx[dfx_names %in% n, ]
+    h2 <- dfx[dfx_chrs %in% n, ]
     chr_hits <- rbind.data.frame(h1, h2)$seqnames
     chr_hits <- as.character(droplevels(chr_hits))
     hits <- GRanges_seqname_picker(chr_all, chr_hits)
@@ -302,8 +322,12 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
     stop("unknown type of argument, n=")
   }
 
+  if (is.null(hits)) {
+    stop("unable to extract hits")
+  }
+
   # the seqnames of hits
-  hits_seqnames <- as.character(seqnames(hits))
+  hits_seqnames <- as.character(GenomicRanges::seqnames(hits))
 
   # number of seqnames records, hits
   if (length(hits) == 0) {
@@ -338,7 +362,11 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
     # ctl sample
     if (is(gr_bw, "GRanges")) {
       gr_hit <- GRanges_seqname_picker(gr_bw, i_name)
-      gr_df  <- GRanges_to_data.frame(gr_hit)
+      if (is.null(gr_hit)) {
+        gr_df <- empty_df
+      } else {
+        gr_df  <- GRanges_to_data.frame(gr_hit)
+      }
     } else {
       gr_df  <- empty_df
     }
@@ -356,8 +384,8 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
 
 
 
-
-#' extract data.frame from dual ChIP-seq experiments
+#' process pair-experiment files
+#' read bigWig files and return in data.frame format
 #'
 #' @param ctl_ip_bw the bigWig file of IP samples in control experiment
 #'
@@ -371,6 +399,12 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
 #'
 #' @param n a list of chromosomes names to extract from the bigWig files,
 #'   default, TRUE, use all seqnames
+#'
+#' @return a list of data.frame
+#'
+#' @import dplyr
+#'
+#' @export
 #'
 chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
                                ctl_input_bw = NULL, tre_input_bw = NULL,
@@ -392,17 +426,18 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
     hits <- chr_all
   } else if (all(is.character(n))) {
     # filt by chr names, for TE only
-    dfx <- as.data.frame(chr_all)
-    dfx_names <- rownames(dfx)
-    dfx_chrs  <- as.character(dfx$seqnames)
-    # overlap
-    h1   <- dfx[dfx_names %in% n, ]
-    h2   <- dfx[dfx_chrs %in% n, ]
-    chr_hits <- rbind.data.frame(h1, h2)$seqnames
-    chr_hits <- as.character(droplevels(chr_hits))
-    hits <- GRanges_seqname_picker(chr_all, chr_hits)
+    dfx <- tibble::rownames_to_column(as.data.frame(chr_all), "name")
+    stopifnot(all(c("seqnames", "name") %in% names(dfx)))
+    dfx_hits <- dplyr::filter(dfx, seqnames %in% n | name %in% n)
+    chr_hits <- as.character(droplevels(dfx_hits$seqnames))
+    hits     <- GRanges_seqname_picker(chr_all, g = chr_hits)
   } else {
     stop("unknown type of argument, n=")
+  }
+
+  # checkpoint
+  if (is.null(hits)) {
+    stop("records not found in fasize, check n= option")
   }
 
   # the seqnames of hits
@@ -442,12 +477,17 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
                            strand   = factor(),
                            name     = factor(),
                            y        = integer(),
-                           sample   = character(),
+                           sample   = factor(),
                            stringsAsFactors = FALSE)
     # ctl sample
     if (is(ctl_gr_bw, "GRanges")) {
       ctl_gr_hit <- GRanges_seqname_picker(ctl_gr_bw, i_name)
-      ctl_gr_df  <- GRanges_to_data.frame(ctl_gr_hit)
+      if (is.null(ctl_gr_hit)) {
+        ctl_gr_df <- empty_df
+      } else {
+        ctl_gr_df  <- GRanges_to_data.frame(ctl_gr_hit)
+      }
+      # add label to smaple
       if (nrow(ctl_gr_df) > 0) {
         ctl_gr_df$sample <- ctl_label
       }
@@ -458,7 +498,12 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
     # tre sample
     if (is(tre_gr_bw, "GRanges")) {
       tre_gr_hit <- GRanges_seqname_picker(tre_gr_bw, i_name)
-      tre_gr_df <- GRanges_to_data.frame(tre_gr_hit)
+      if (is.null(tre_gr_hit)) {
+        tre_gr_df <- empty_df
+      } else {
+        tre_gr_df  <- GRanges_to_data.frame(tre_gr_hit)
+      }
+      # add label to smaple
       if (nrow(tre_gr_df) > 0) {
         tre_gr_df$sample <- tre_label
       }
@@ -469,6 +514,12 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
     # merge data.frame
     gr_df <- rbind.data.frame(ctl_gr_df, tre_gr_df)
 
+    # set levels
+    gr_df$sample <- factor(gr_df$sample, levels = c(ctl_label, tre_label))
+
+    # remove minus values
+    gr_df <- dplyr::filter(gr_df, score > 0)
+
     # report data.frame
     return(gr_df)
   })
@@ -478,6 +529,55 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
 
   # a list of data.frames
   return(bb)
+}
+
+
+
+#' process pair-experiment files
+#' read bigWig files and return in data.frame format
+#'
+#' @param ctl_ip_bw the bigWig file of IP samples in control experiment
+#'
+#' @param ctl_input_bw the bigWig file of Input samples in control experiment
+#'
+#' @param tre_ip_bw the bigWig file of IP samples in treatment experiment
+#'
+#' @param tre_input_bw the bigWig file of Input samples in treatment experiment
+#'
+#' @param fasize the chromosome size file of the bigWig, tab separated
+#'
+#' @param n a list of chromosomes names to extract from the bigWig files,
+#'   default, TRUE, use all seqnames
+#'
+#' @param pdf_out logical, save the plots in pdf file
+#'
+#' @import dplyr
+#'
+#' @export
+#'
+chipseq_bw_parser3 <- function(ctl_ip_bw, tre_ip_bw, fasize,
+                               ctl_input_bw = NULL, tre_input_bw = NULL,
+                               ctl_label = NULL, tre_label = NULL,
+                               n = TRUE, pdf_out = NULL) {
+  if (is.null(pdf_out)) {
+    pdf_dual <- as.character(glue::glue("ChIPseq.{ctl_label}.vs.{tre_label}.5TEs.trackview.pdf"))
+  } else {
+    pdf_dual <- pdf_out
+  }
+
+  # make plots for dual samples
+  df_dual <- chipseq_bw_parser2(ctl_ip_bw, tre_ip_bw, fasize,
+                                ctl_input_bw, tre_input_bw,
+                                ctl_label = ctl_label,
+                                tre_label = tre_label,
+                                n = n)
+
+  plist_dual <- lapply(seq_len(length(df_dual)), function(i) {
+    df_dual[[i]] <- dplyr::filter(df_dual[[i]], score > 0)
+    p <- coverage_plot_dual(df_dual[[i]])
+    return(p)
+  })
+  plot_n_pages(plist_dual, nrow = 5, ncol = 2, pdf_out = pdf_dual)
 }
 
 
@@ -496,14 +596,14 @@ theme_picker <- function(x) {
           panel.grid   = element_blank(),
           plot.title   = element_text(color = "black", hjust = .5, size = 12),
           axis.line    = element_blank(),
-          # axis.line    = element_line(color = "black", size = .7),
           axis.ticks.x = element_blank(),
           axis.text.x  = element_blank(),
           axis.title.x = element_blank(),
           axis.ticks.y = element_line(color = "black", size = .7),
           axis.title.y = element_text(color = "black", size = 10, vjust = .5))
   # overlay tracks
-  t2 <- t1 + theme(legend.position = c(0.8, 0.8))
+  # t2 <- t1 + theme(legend.position = c(0.8, 0.8))
+  t2 <- t1 + theme(legend.position = "top")
   # choose theme
   tm <- list(t1, t2)
   names(tm) <- seq_len(length(tm))
@@ -515,7 +615,8 @@ theme_picker <- function(x) {
 }
 
 
-#' generate coverage plot for single chr
+
+#' generate coverage plot for single chromosome
 #'
 #' @param data a data.frame contains position and coverage values, require
 #'   "sample" to group the tracks
@@ -523,18 +624,27 @@ theme_picker <- function(x) {
 #' @param fill.color the color for fill and line of coverage plot,
 #'   default: orange
 #'
+#' @param exclude.minus.scores logical, whether exclude minus values in plot
+#'
 #' @import ggplot2
 #' @import ggridges
 #'
 #' @export
 #'
-coverage_plot_single <- function(data, fill.color = "orange") {
+coverage_plot_single <- function(data, fill.color = "orange",
+                                 y.scale.max = "auto",
+                                 exclude.minus.scores = TRUE) {
   stopifnot(is.data.frame(data))
   stopifnot(all(c("name", "position", "score") %in% names(data)))
 
   # number of records of data
   if (nrow(data) == 0) {
     stop("empty data.frame in input")
+  }
+
+  # exclude minus values
+  if (isTRUE(exclude.minus.scores)) {
+    data <- dplyr::filter(data, score >= 0)
   }
 
   # number of names
@@ -554,11 +664,18 @@ coverage_plot_single <- function(data, fill.color = "orange") {
   # chooose theme
   mytheme <- theme_picker(1)
 
+  # determine y-max
+  y.max <- ceiling(max(data$score / 10)) * 10
+  if (is.numeric(y.scale.max) & y.scale.max > y.max) {
+    y.max <- y.scale.max
+  }
+
   # generate plot
   p1 <- ggplot(data, aes(position, y, height = score,
                          color = name, fill = name)) +
     ggridges::geom_ridgeline(show.legend = FALSE) +
     guides(fill = guide_legend(title = NULL, label.position = "right")) +
+    scale_y_continuous(limits = c(0, y.max)) +
     ylab("base coverage [rpm]") +
     ggtitle(n_names) +
     scale_fill_manual(values = fill.color) +
@@ -578,19 +695,31 @@ coverage_plot_single <- function(data, fill.color = "orange") {
 #' @param fill.color the color for fill and line of coverage plot,
 #'   default: orange
 #'
+#' @param exclude.minus.scores logical, whether exclude minus values in plot
+#'
+#' @param y.scale.max numerical or "auto", specify the y-max in plot.
+#'
 #' @import ggplot2
 #' @import ggridges
 #'
 #' @export
 #'
-coverage_plot_dual <- function(data, fill.color = c("orange", "red2")) {
+coverage_plot_dual <- function(data, fill.color = c("orange", "red2"),
+                               exclude.minus.scores = TRUE,
+                               y.scale.max = "auto") {
   stopifnot(is.data.frame(data))
   stopifnot(all(c("sample", "name", "position", "score") %in% names(data)))
   stopifnot(length(fill.color) == 2)
 
   # number of records of data
   if (nrow(data) == 0) {
-    stop("empty data.frame in input")
+    warning("empty data.frame in input")
+    return(NULL)
+  }
+
+  # exclude minus values
+  if (isTRUE(exclude.minus.scores)) {
+    data <- dplyr::filter(data, score >= 0)
   }
 
   # number of names
@@ -616,15 +745,23 @@ coverage_plot_dual <- function(data, fill.color = c("orange", "red2")) {
   # chooose theme
   mytheme <- theme_picker(2)
 
+  # determine y-max
+  y.max <- ceiling(max(data$score / 10)) * 10
+  if (is.numeric(y.scale.max) & y.scale.max > y.max) {
+    y.max <- y.scale.max
+  }
+
   # generate plot
   p2 <- ggplot(data, aes(position, y, height = score,
                          color = sample, fill = sample)) +
-    ggridges::geom_ridgeline(show.legend  = TRUE) +
+    ggridges::geom_ridgeline(show.legend  = TRUE, alpha = .5) +
     guides(color = guide_legend(title     = NULL),
-           fill  = guide_legend(title     = NULL, label.vjust = 1,
+           fill  = guide_legend(title     = NULL,
+                                label.vjust = 1,
                                 keywidth  = .6,
                                 keyheight = .2,
                                 label.position = "right")) +
+    scale_y_continuous(limits = c(0, y.max)) +
     ylab("base coverage [rpm]") +
     ggtitle(n_names) +
     scale_fill_manual(values = fill.color) +
@@ -635,15 +772,22 @@ coverage_plot_dual <- function(data, fill.color = c("orange", "red2")) {
 }
 
 
-#' multiple plots in one page
+
+#' save multiple plots in one page
 #'
 #' generate PDF file for multiple plots
 #' arrange multiple n_row x n_col plots in one page
 #'
-#' @param plist a list
+#' @param plist a list of ggplot objects
 #'
 #' @param nrow Number of rows in plot grid, default: 1
+#'
 #' @param ncol Number of cols in plot grid, default: 1
+#'
+#' @param page.width int, default 8
+#'
+#' @param page.height int, default 10
+#'
 #' @param pdf_out The pdf file to save the plots
 #'
 #'
@@ -683,7 +827,7 @@ plot_n_pages <- function(plotlist = NULL, nrow = 2, ncol = 5,
     idx <- page_index[[n]]
     idx_plist <- plots[idx]
     pg <- cowplot::plot_grid(plotlist = idx_plist, align = "hv",
-                             nrow = nrow, ncol = ncol, label_colour = "AUTO")
+                             nrow = nrow, ncol = ncol, labels = "auto")
     print(cowplot::ggdraw(pg))
   }
   dev.off()
@@ -691,3 +835,7 @@ plot_n_pages <- function(plotlist = NULL, nrow = 2, ncol = 5,
   # return the pdf filename
   return(pdf_out)
 }
+
+
+
+# EOF
