@@ -72,7 +72,8 @@ BedNumBarplot <- function(data) {
 #' BedAnnoBarplot
 #'
 #' @param data data.frame of the mapping stat
-#' @param type percentile or count
+#' @param type percentile or count; identity, percentage
+#' @category reads, peaks
 #'
 #' @import ggplot2
 #' @import dplyr
