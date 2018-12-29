@@ -3,7 +3,7 @@
 
 #' make plots for publication
 #'
-#' @param file Path to the csv file of DEseq2 output, eg, function
+#' @param x Path to the csv file of DEseq2 output, eg, function
 #'   DESeq2_for_featureCounts, result "transcripts_deseq2.csv"
 #'
 #' @param path_pdf Directory to save the pdf file, contains
@@ -25,6 +25,7 @@ DESeq2_publish_plot <- function(x, path_pdf,
 
   # read file
   df <- DESeq2_csv2df(x)
+  names(df) <- gsub("[^A-Za-z0-9]", "_", names(df)) # remove unsupport characters
   x.name <- colnames(df)[2]
   y.name <- colnames(df)[3]
 

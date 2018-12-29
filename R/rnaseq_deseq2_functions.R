@@ -57,6 +57,25 @@ DESeq2_for_featureCounts <- function(x, organism = "dm3", outdir = "./",
 
     # run DESeq2
     deseq2_run(ma, coldata, smp_dir, pvalue_cutoff)
+
+    ##------------------------------------------------------------------------##
+    # rename gene id
+    fs <- file.path(smp_dir, "transcripts_deseq2.csv")
+    fsFix <- file.path(smp_dir, "transcripts_deseq2.fix.xls")
+    ## save table
+    fName = paste("genelist", organism, "rda", sep = ".")
+    f = system.file("extdata", fName, package = "goldclipReport")
+    load(f) # genelist
+
+    ## read data
+    df <- DESeq2_csv2df(fs)
+    df2 <- dplyr::mutate(df, id = as.character(id)) %>%
+      dplyr::mutate(id = plyr::mapvalues(id, genelist$gene_id, genelist$gene_name, FALSE)) %>%
+      dplyr::filter(! is.na(padj)) %>%
+      dplyr::arrange(padj)
+
+    readr::write_delim(df2, fsFix, delim = "\t", col_names = TRUE)
+    ##----------------------------------------------------------------------------##
   }
 }
 
@@ -127,11 +146,11 @@ featureCountsReader <- function(x, organism = "dm3", normalizeTo1M = FALSE,
   # rename rownames
   genelist <- get_genelist(organism)
   stopifnot(all(c("gene_id", "gene_name") %in% names(genelist)))
-  rownames(dfOut) <- plyr::mapvalues(rownames(dfOut),
-                                     from = genelist$gene_id,
-                                     to = genelist$gene_name,
-                                     warn_missing = FALSE)
-  # remove temp objects
+  # rownames(dfOut) <- plyr::mapvalues(rownames(dfOut),
+  #                                    from = genelist$gene_id,
+  #                                    to = genelist$gene_name,
+  #                                    warn_missing = FALSE)
+  # # remove temp objects
   rm(df_exp)
   rm(df_exp2)
   rm(dfNorm)
@@ -378,11 +397,24 @@ DESeq2_data_from_matrix <- function(df, coldata) {
 #' optional: download from ensembl, update
 get_genelist <- function(organism = "dm3") {
   # library(biomaRt)
-  f = system.file("extdata", "genelist.dm3.rda", package = "goldclipReport")
+  f_name = paste("genelist", organism, "rda", sep = ".")
+  f = system.file("extdata", f_name, package = "goldclipReport")
   if (file.exists(f)) {
-    load(f) # genelist.dm3
+    load(f) # genelist
+    return(genelist)
+  } else {
+    stop('genelist file not exists')
   }
-  genelist <- genelist.dm3
+
+# genelist <- genelist.dm3
+#
+#   mart <- biomaRt::useMart(biomart = "ensembl",
+#                            dataset = "hsapiens_gene_ensembl")
+#
+#   genelist <- biomaRt::getBM(attributes = c("ensembl_gene_id",
+#                                             "external_gene_name"),
+#                              mart = mart)
+
   #
   # mart <- biomaRt::useMart(biomart = "ensembl",
   #                          dataset = "dmelanogaster_gene_ensembl",
@@ -396,7 +428,6 @@ get_genelist <- function(organism = "dm3") {
   #                           gene_id = flybase_gene_id,
   #                           gene_name = external_gene_id)
   # #
-  return(genelist)
 }
 
 
