@@ -131,7 +131,6 @@ FastqcPlot <- function (qc.file) {
 }
 
 
-
 #' FastqcReport
 #'
 #' This function parsing *_fastqc.zip files from input path.
