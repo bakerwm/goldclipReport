@@ -155,6 +155,9 @@ FastqcPlot <- function (qc.file) {
 #' FastqcReport(qc.path, result.file = "demo")
 #' }
 #'
+#' @import fastqcr
+#' @import rmarkdown
+#'
 #' @return A list of paths of zip files
 #' @export
 FastqcReport <- function (qc.path, result.file, experiment = NULL,
