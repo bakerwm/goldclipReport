@@ -108,6 +108,7 @@ FastqcFiles <- function (qc.path) {
   return(qc.files)
 }
 
+
 #' parse fastQC output
 #'
 #' @param qc.file the zip file of fastqc ouptut
@@ -128,6 +129,102 @@ FastqcPlot <- function (qc.file) {
   p <- plot_grid(title, p3, ncol = 1, rel_heights = c(0.1, 1))
   # rel_heights values control title margins
   return(p)
+}
+
+
+#' fastqc_plot
+#'
+#' @import fastqcr
+#' @import ggplot2
+#' @importFrom cowplot ggdraw
+#' @importFrom cowplot plot_grid
+#' @importFrom cowplot plot_label
+#' @description Make fastqc plots
+#' @param x zip file of fastqc output
+#' @param modules the module name of fastqc report
+#'   group1, contains base_quality, seq_quality, seq_content, length
+#'   \itemize{
+#'   \item "summary: Summary",
+#'   \item "base_quality: Per base sequence quality",
+#'   \item "seq_quality: Per sequence quality scores",
+#'   \item "seq_content: Per base sequence content",
+#'   \item "gc: Per sequence GC content",
+#'   \item "base_n: Per base N content",
+#'   \item "length: Sequence Length Distribution",
+#'   \item "duplication: Sequence Duplication Levels",
+#'   \item "overrep: Overrepresented sequences",
+#'   \item "adaptor: Adapter Content",
+#'   \item "kmer: Kmer Content"
+#'   }
+#'
+#' @return a list of ggplots containing the plot
+#' @examples
+#' # Demo
+#' qc.file <- system.file("fastqc_results", "S1_fastqc.zip",  package = "fastqcr")
+#'
+#' @export
+fastqc_plot <- function(x, modules = "group1") {
+  # 1. base quality
+  # 2. base content
+  # 3. length
+  # 4. sequence quality
+
+  # read file
+  qc <- qc_read(x)
+
+  modules_selected <- .valid_fastqc_modules(modules)
+
+  plist <- lapply(modules_selected,
+                function(module, qc){
+                  fastqcr::qc_plot(qc, module) #+ theme_bw()
+                }, qc)
+  p <- plot_grid(plotlist = plist, ncol = 2, labels = "AUTO")
+
+  # title
+  x_name <- gsub("_fastqc|.zip", "", basename(x))
+  title <- ggdraw() +
+    draw_label(x_name, fontface='bold')
+  plot_grid(title, p, ncol=1, rel_heights=c(0.1, 1)) # rel_heights values control title margins
+}
+
+
+
+#' Check and returns valid fastqc modules
+#' This function is from fastqcr package
+#'
+.valid_fastqc_modules <- function(modules = "all"){
+
+  allowed.modules <- c("Summary",
+                       "Basic Statistics",
+                       "Per base sequence quality",
+                       "Per tile sequence quality",
+                       "Per sequence quality scores",
+                       "Per base sequence content",
+                       "Per sequence GC content",
+                       "Per base N content",
+                       "Sequence Length Distribution",
+                       "Sequence Duplication Levels",
+                       "Overrepresented sequences",
+                       "Adapter Content",
+                       "Kmer Content")
+
+  # Modules
+  if( "all" %in% modules) {
+    modules <- allowed.modules
+  } else if("group1" %in% modules) {
+    modules <- allowed.modules[c(3, 5, 6, 9)]
+  } else {
+    # partial matching of module names
+    modules <- grep(pattern= paste(modules, collapse = "|"),
+                    allowed.modules,
+                    ignore.case = TRUE, value = TRUE) %>%
+      unique()
+    if(length(modules) == 0) {
+      stop("Incorect module names provided. Allowed values include: \n\n",
+           paste(allowed.modules, collapse = "\n- "))
+    }
+  }
+  modules
 }
 
 
