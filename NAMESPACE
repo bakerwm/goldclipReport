@@ -1,1 +1,8 @@
 exportPattern("^[[:alpha:]]+")
+import(dplyr)
+import(ggplot2)
+import(tibble)
+import(fastqcr)
+importFrom(cowplot,ggdraw)
+importFrom(cowplot,draw_label)
+importFrom(cowplot,plot_grid)

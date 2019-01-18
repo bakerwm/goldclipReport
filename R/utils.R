@@ -22,8 +22,8 @@ merge_list_of_dataframes <- function(list, by) {
     df <- merge(list[[1]], list[[2]], by = by, all = TRUE)
     df[is.na(df)] <- 0
     # drop 1, 2
-    list <- list.remove(list, c(1, 2))
-    list_new <- list.append(list, df)
+    list <- rlist::list.remove(list, c(1, 2))
+    list_new <- rlist::list.append(list, df)
     # list[[1]] <- NULL
     # list[[2]] <- NULL
     # list

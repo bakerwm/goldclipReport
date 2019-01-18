@@ -3,3 +3,8 @@
 .Rhistory
 .RData
 .Ruserdata
+inst/report_templates/Figs/
+inst/report_templates/*.png
+inst/report_templates/alignment_report_template.Rmd
+inst/report_templates/*.html
+

@@ -397,37 +397,16 @@ DESeq2_data_from_matrix <- function(df, coldata) {
 #' optional: download from ensembl, update
 get_genelist <- function(organism = "dm3") {
   # library(biomaRt)
+  print(organism)
   f_name = paste("genelist", organism, "rda", sep = ".")
   f = system.file("extdata", f_name, package = "goldclipReport")
   if (file.exists(f)) {
+    print(f)
     load(f) # genelist
     return(genelist)
   } else {
     stop('genelist file not exists')
   }
-
-# genelist <- genelist.dm3
-#
-#   mart <- biomaRt::useMart(biomart = "ensembl",
-#                            dataset = "hsapiens_gene_ensembl")
-#
-#   genelist <- biomaRt::getBM(attributes = c("ensembl_gene_id",
-#                                             "external_gene_name"),
-#                              mart = mart)
-
-  #
-  # mart <- biomaRt::useMart(biomart = "ensembl",
-  #                          dataset = "dmelanogaster_gene_ensembl",
-  #                          host    = "feb2014.archive.ensembl.org")
-  # genelist <- biomaRt::getBM(attributes = c("flybase_gene_id",
-  #                                           "flybasecgid_gene",
-  #                                           "external_gene_id"),
-  #                            mart = mart)
-  # # genelist: gene_id, gene_name
-  # genelist <- dplyr::rename(genelist,
-  #                           gene_id = flybase_gene_id,
-  #                           gene_name = external_gene_id)
-  # #
 }
 
 
