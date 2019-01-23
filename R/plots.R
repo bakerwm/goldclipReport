@@ -303,7 +303,7 @@ align_report <- function (input, output, template = NULL, preview = TRUE) {
   align_html <- file.path(output, "alignment_report.html")
 
   if (is.null(template)) {
-    report_template <- system.file("report_templates",
+    report_template <- system.file("extdata",
                                    "alignment_report_template.Rmd",
                                    package = "goldclipReport")
   } else {
