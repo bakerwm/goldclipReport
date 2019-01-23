@@ -264,7 +264,7 @@ fastqc_report <- function (input, output, template = NULL, preview = TRUE) {
   }
 
   if (is.null(template)) {
-    report_template <- system.file("report_templates",
+    report_template <- system.file("extdata",
                                    "fastqc_report_001.Rmd",
                                    package = "goldclipReport")
   } else {
