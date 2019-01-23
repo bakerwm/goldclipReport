@@ -1,10 +1,9 @@
 
 
-
 #' make plots for publication
 #'
-#' @param x Path to the csv file of DEseq2 output, eg, function
-#'   DESeq2_for_featureCounts, result "transcripts_deseq2.csv"
+#' @param x Path to the xls file of DEseq2 output, eg, function
+#'   DESeq2_for_featureCounts, result "transcripts_deseq2.csv.fix.xls"
 #'
 #' @param path_pdf Directory to save the pdf file, contains
 #'   scatter, MA, Volcano plots
@@ -17,40 +16,50 @@
 #' @import ggrepel
 #'
 #' @export
-#'
 DESeq2_publish_plot <- function(x, path_pdf,
-                                gene_labels = c("nxf2", "piwi", "CG9754"),
+                                gene_labels = NULL, #c("nxf2", "piwi", "CG9754"),
                                 save2pdf = TRUE) {
   stopifnot(file.exists(x))
 
   # read file
-  df <- DESeq2_csv2df(x)
+  df <- DESeq2_xls2df(x)
+
+  # rename id FBgn0000001_te
+  # convert to FB00000001 and te
+  id_tag <- sum(grepl("_", df$id)) / length(df$id)
+  if(id_tag == 1) {
+    df <- df %>%
+      tidyr::separate(id, into = c("name", "id"), sep = "_")
+    df$name <- NULL
+  }
+
   names(df) <- gsub("[^A-Za-z0-9]", "_", names(df)) # remove unsupport characters
   x.name <- colnames(df)[2]
   y.name <- colnames(df)[3]
 
   # make plots
   p1 <- DESeq2_de_scatter(df, x.name, y.name,
-                          show.sig.genes = FALSE,
+                          show.sig.genes = TRUE,
                           labels = gene_labels,
-                          pval_cutoff = 0.05, max_labels = 3)
+                          pval_cutoff = 0.05, max_labels = 5)
 
-  p2 <- DESeq2_de_ma(df, show.sig.genes = FALSE,
+  p2 <- DESeq2_de_ma(df, show.sig.genes = TRUE,
                      labels = gene_labels,
-                     pval_cutoff = 0.05, max_labels = 3,
+                     pval_cutoff = 0.05, max_labels = 5,
                      show_volcano = FALSE)
 
   p3 <- DESeq2_de_ma(df, show.sig.genes = TRUE,
                      labels = gene_labels,
                      pval_cutoff = 0.05, max_labels = 5,
                      show_volcano = TRUE)
+
   # add legend
   figure_legend <- "Figure. Differentially expression analysis. (a-b) Comparasion of
   gene expression is shown as rpm from two conditions. Dashed lines indicate
   twofold change. a. scatter plot, b. MA plot. (c) Volcano plot showing
   enrichment values and corresponding significance levels."
 
-  pg1 <- cowplot::plot_grid(p1, p2, p3, NULL, align = "hv",
+  pg1 <- cowplot::plot_grid(p1, p2, p3, align = "hv",
                             ncol = 2, labels = "auto")
   pg2 <- cowplot::add_sub(pg1, figure_legend, x = 0, hjust = 0, size = 10)
   # cowplot::ggdraw(pg2)
@@ -69,8 +78,6 @@ DESeq2_publish_plot <- function(x, path_pdf,
     return(pg2)
   }
 }
-
-
 
 
 #' generate scatter plot for DESeq2 analysis
@@ -124,7 +131,6 @@ DESeq2_de_scatter <- function(data, x.name, y.name, show.sig.genes = FALSE,
                     data_label = data_label)
   return(p)
 }
-
 
 
 #' create MA or Volcano plot
@@ -182,7 +188,6 @@ DESeq2_de_ma <- function(data, show.sig.genes = FALSE, labels = NULL,
   }
   return(p)
 }
-
 
 
 #' generate scatter plot for DE analysis
@@ -296,7 +301,6 @@ plot_scatter <- function(data, data_sig, x.name, y.name, x.label = NULL,
 }
 
 
-
 #' generate volcano plot for DE analysis
 #'
 #' @param data A data frame for the full version of data, required
@@ -366,7 +370,6 @@ plot_ma <- function(data, data_sig, data_label = NULL) {
   }
   return(p)
 }
-
 
 
 #' generate volcano plot for DE analysis

@@ -1,9 +1,4 @@
 
-
-
-
-
-
 #' map_stat_plot
 #'
 #' @param x data.frame of mapping stat
@@ -101,6 +96,7 @@ map_stat_read <- function(x, origin = FALSE) {
   t2 <- c("rRNA", "unique", "multiple", "rRNA.sp", "unique.sp", "multiple.sp", "unmap")
   names(df1) <- plyr::mapvalues(names(df1), from = t1, to = t2, warn_missing = FALSE)
   colnames(df1)[1] <- "id" # rename
+  df1 <- dplyr::arrange(df1, id) # arrange
 
   if(! isTRUE(origin)) {
     dfx <- df1 %>%

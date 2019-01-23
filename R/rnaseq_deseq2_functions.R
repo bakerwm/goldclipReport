@@ -24,7 +24,11 @@
 DESeq2_for_featureCounts <- function(x, organism = "dm3", outdir = "./",
                                      pvalue_cutoff = 0.05) {
   # read counts
-  df_count <- featureCountsReader(x, organism)
+  if(inherits(x, "data.frame")){
+    df_count <- x
+  } else {
+    df_count <- featureCountsReader(x, organism)
+  }
 
   # fetch replicate samples
   col_reps <- grep("_rep[1-9]", names(df_count), ignore.case = TRUE)
@@ -445,17 +449,12 @@ DESeq2_add_mean <- function(data){
 #'
 #' @param file Path to csv file
 #'
-#'
 #' @import readr
 #' @import dplyr
-#'
-#'
 #'
 #' @export
 DESeq2_csv2df <- function(x) {
   # read DESeq2 csv file
-  # library(readr)
-  # library(dplyr)
   df <- readr::read_csv(x, col_types = readr::cols())
   # colnames(df)[1] <- 'id'
   df[, 1] <- NULL # remove the first column
@@ -468,7 +467,23 @@ DESeq2_csv2df <- function(x) {
 
 
 
-#
+#' read output of DESeq2_run function
+#' xls format
+#'
+#' @param x Path to xls file
+#'
+#' @import readr
+#' @import dplyr
+#'
+#' @export
+DESeq2_xls2df <- function(x) {
+  # read DESeq2 csv file
+  #df <- readr::read_csv(x, col_types = readr::cols())
+  df <- readr::read_delim(x, "\t", col_types = readr::cols())
+  return(df)
+}
+
+
 # de_deseq2_plot <- function(df, withTE = FALSE, add_sigNames = TRUE,
 #                            extra_ids = c("CG9754", "nxf2", "piwi")) {
 #   s1 <- colnames(df)[2:3]

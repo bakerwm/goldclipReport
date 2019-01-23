@@ -175,9 +175,9 @@ fastqc_plot <- function(x, modules = "group1") {
   modules_selected <- .valid_fastqc_modules(modules)
 
   plist <- lapply(modules_selected,
-                function(module, qc){
-                  fastqcr::qc_plot(qc, module) #+ theme_bw()
-                }, qc)
+                  function(module, qc){
+                    fastqcr::qc_plot(qc, module) #+ theme_bw()
+                  }, qc)
   p <- plot_grid(plotlist = plist, ncol = 2, labels = "AUTO")
 
   # title
@@ -235,12 +235,10 @@ fastqc_plot <- function(x, modules = "group1") {
 #' file.
 #'
 #' @description Create html report for fastqc output
-#' @param qc.path Path to the input directory, Default is the
+#' @param input Path to the input directory, Default is the
 #'   current working directory.
-#' @param result.file path to the result file prefix (e.g., path/to/qc-result).
+#' @param output path to the result file prefix (e.g., path/to/qc-result).
 #'   Don't add the file extension.
-#' @param experiment text specifying a short description of the experiment. For
-#'  example experiment = "goldCLIP seqeuencing for AGO2".
 #' @param template a character vector specifying the path to an Rmd template.
 #'  file.
 #' @param preview logical value. If TRUE, shows a preview of the report.
@@ -249,7 +247,7 @@ fastqc_plot <- function(x, modules = "group1") {
 #' # Demo
 #' qc.path <- system.file("fastqc_results", package = "fastqcr")
 #'
-#' FastqcReport(qc.path, result.file = "demo")
+#' fastqc_report(qc.path, result.file = "demo")
 #' }
 #'
 #' @import fastqcr
@@ -257,122 +255,39 @@ fastqc_plot <- function(x, modules = "group1") {
 #'
 #' @return A list of paths of zip files
 #' @export
-FastqcReport <- function (qc.path, result.file, experiment = NULL,
-                          template = NULL, preview = TRUE) {
-  if (qc.path == ".")
-    qc.path <- getwd()
-  if (! dir.exists(qc.path) & ! file.exists(qc.path)) {
-    theDirname  <- dirname(qc.path)
-    theBasename <- basename(qc.path)
-    qc.path     <- list.files(theDirname,
-                              pattern = paste0("^", theBasename, "*_fastqc.zip"),
-                              full.names = TRUE)
-    if (length(qc.path) == 0)
-      stop("Can't find any file that match: ", theBasename)
-    qc.path <- qc.path[1]
+fastqc_report <- function (input, output, template = NULL, preview = TRUE) {
+  ## input
+  input <- normalizePath(input)
+  qc.files <- FastqcFiles(input)
+  if(length(qc.files) == 0){
+    stop("*_fastqc.zip files not detected")
   }
-  if (! dir.exists(qc.path) | !file.exists(qc.path)) {
-    stop("Specified QC path doesn't exist.")
-  }
-  qc.path <- normalizePath(qc.path)
-  if(!dir.exists(dirname(result.file)))
-    dir.create(dirname(result.file), showWarnings = FALSE, recursive = TRUE)
-  oldwd <- getwd()
-  setwd(dirname(result.file))
-  result.file <- paste0(basename(result.file), ".html")
-  result.file <- file.path(getwd(), result.file)
+
   if (is.null(template)) {
     report_template <- system.file("report_templates",
-                                   "fastqc_report_template.Rmd",
-                                   package = "goldclipData")
+                                   "fastqc_report_001.Rmd",
+                                   package = "goldclipReport")
   } else {
     report_template <- template
   }
-  rmarkdown::render(input = report_template, output_file = result.file,
-                    params = list(qc.path = qc.path, experiment = experiment))
-  if (preview) {
-    utils::browseURL(result.file)
+
+  ## output
+  output <- normalizePath(output)
+  if(! dir.exists(output)){
+    dir.create(output, recursive = TRUE, showWarnings = FALSE)
   }
-  message("\n--------------------------\nOutput file: ", result.file,
+  output_html <- file.path(output, "fastqc_report.html")
+
+  ## run
+  print(report_template)
+
+  rmarkdown::render(input = report_template, output_file = output_html,
+                    params = list(qc_path = input))
+
+  if (preview) {
+    utils::browseURL(output_html)
+  }
+  message("\n--------------------------\nOutput file: ", output_html,
           "\n--------------------------\n")
-  setwd(oldwd)
 }
-
-
-
-#
-#
-# funcA <- function(s) {
-#   s   <- gsub("^\n", "", s)
-#   s1  <- unlist(strsplit(s, "\n", TRUE))
-#   tag <- unlist(strsplit(gsub(">>", "", s1[1]), "\t"))[1] # title
-#   header <- unlist(strsplit(gsub("^#", "", s1[2]), "\t")) # header
-#   s2 <- s1[-c(1:2)]
-#   df <- tidyr::separate(data.frame(name = s1[-c(1:2)]), name, header, sep = "\t")
-#   t <- list(tag = df)
-#   names(t) <- tag
-#   return(t)
-# }
-#
-# f <- "demo_fastqc.zip"
-# group <- "Per base sequence quality"
-#
-#
-# # tempdir
-# dd <- tempdir()
-# #file.path(gsub(".zip$", "", basename(f)), "fastqc_data.txt")
-# unzip(f, exdir = dd)
-# fd <- list.files(dd, "fastqc_data.txt", recursive = TRUE, full.names = TRUE)
-# line <- paste(readLines(fd)[-1], collapse = "\n")
-# a <- unlist(strsplit(line, ">>END_MODULE", fixed = TRUE))
-# qc <- lapply(a, funcA)
-# qc2 <- list()
-# for(i in seq(length(qc))){
-#   qc2 <- c(qc2, qc[[i]])
-# }
-# ## title
-# if(group %in% names(qc2)) {
-#   df <- qc2[[group]]
-# }
-#
-#
-# library(ggplot2)
-# ## plots
-# # 1. base-quality
-# df1 <- qc2[["Per base sequence quality"]]
-#
-# # 2. base-content
-# df2 <- qc2[["Per base sequence content"]] %>%
-#   tidyr::gather("base", "freq", 2:5) %>%
-#   dplyr::rename(position = Base) %>%
-#   dplyr::mutate(freq = as.numeric(freq),
-#                 position = factor(position, levels = unique(position)),
-#                 base = factor(base, levels = c("A", "C", "G", "T")))
-# # barplot
-# p2a <- ggplot(df2, aes(position, freq, fill = base)) +
-#   geom_bar(position = "fill", stat = "identity") +
-#   xlab("Position in read (bp)") +
-#   ylab("Per base sequence content (%)") +
-#   scale_y_continuous(breaks = seq(0, 1, 0.2), labels = seq(0, 100, 20)) +
-#   scale_fill_manual(values = c("green3", "blue3", "grey30", "red3")) +
-#   theme_classic() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1))
-# # lineplot
-# p2b <- ggplot(df2, aes(position, freq, color = base, group = base)) +
-#   geom_point(size = .7) +
-#   geom_line(size = .7) +
-#   xlab("Position in read (bp)") +
-#   ylab("Per base sequence content (%)") +
-#   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20), labels = seq(0, 100, 20)) +
-#   scale_color_manual(values = c("green3", "blue3", "grey30", "red3")) +
-#   theme_classic() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1))
-#
-#
-
-
-
-
-
-
 
