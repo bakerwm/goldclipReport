@@ -50,7 +50,8 @@ stat_files <- params$stat_files
 ```{r map_stat1, fig.width = 8}
 ## for count table
 df_stat <- map_stat_read(stat_files, origin = TRUE) %>%
-  tidyr::gather(key = "group", value = "count", 2:8) %>%
+  tidyr::gather(key = "group", value = "count", -c(id, total)) %>%
+  # tidyr::gather(key = "group", value = "count", 2:8) %>%
   dplyr::mutate(count = prettyNum(count, big.mark = ","),
                 total = prettyNum(total, big.mark = ",")) %>%
   tidyr::spread(key = group, value = count) 
