@@ -32,3 +32,49 @@ merge_list_of_dataframes <- function(list, by) {
     return(merge_list_of_dataframes(list_new, by = by))
   }
 }
+
+
+
+
+
+#' merge a list of data.frames
+#'
+#' @param x a list of data.frames
+#' @param by column name for function merge()
+#' @param all logical
+#'
+#' @import rlist
+#'
+#' @export
+merge_df <- function(x, by, all = TRUE) {
+  stopifnot(inherits(x, "list"))
+
+  # check all data.frame
+  if(!all(unlist(lapply(x, is.data.frame)))){
+    stop("only data.frames allowed in x, exception detected")
+  }
+
+  # check id (by=)
+  n <- lapply(x, function(i) {
+    by %in% names(i)
+  })
+  if(!all(unlist(n))) {
+    stop(paste0("by=", by, " not present in all data.frame"))
+  }
+
+  # merge
+  if(length(x) == 1) {
+    return(x[[1]])
+    #  } else if(length(x) == 2) {
+    #    return(merge(x[[1]], x[[2]], by = by, all = all))
+  } else {
+    df <- merge(x[[1]], x[[2]], by = by, all = all)
+    # convert NA to 0
+    x  <- rlist::list.remove(x, c(1, 2))
+    x2 <- rlist::list.insert(x, 1, df)
+    return(merge_df(x2, by = by, all = all))
+  }
+}
+
+
+

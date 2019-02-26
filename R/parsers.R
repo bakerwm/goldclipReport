@@ -200,6 +200,66 @@ AnnoParser2 <- function(x, prefix = NULL, dm3_basic = FALSE) {
 
 
 
+#' AnnoParser3
+#' parse the output of bed_annotation.py
+#' <type> <count> <sample>
+#'
+#' @param x path, file of the annotation
+#' @param prefix name of the annotation
+#' @param dm3_basic logical, use dm3 types
+#'
+#' @import dplyr
+#'
+#' @export
+AnnoParser3 <- function(x, prefix = NULL, dm3_basic = FALSE) {
+  # sub function
+  f2d <- function(f) {
+    df <- readr::read_delim(f, "\t", col_names = TRUE, col_types = readr::cols())
+    # df <- tibble::rownames_to_column(df, "type") %>%
+    #   dplyr::select(id, type, count) %>%
+    #   dplyr::group_by(id) %>%
+    #   dplyr::mutate(pct = round(count / sum(count) * 100, 2)) %>%
+    #   dplyr::ungroup() %>%
+    #   as.data.frame()
+    return(df)
+  }
+  # parse multiple x files
+  da <- lapply(x, f2d)
+
+  # parsing the annotation output
+  if(! is.null(prefix)) {
+    if (length(da) != length(prefix)) {
+      stop("x and prefix are differ in length")
+    }
+  } else {
+    prefix = ""
+  }
+
+  # add names
+  tags <- c('tts', 'rRNA', 'pseudo', 'promoters', 'ncRNA', 'introns',
+            'intergenic', 'coding', 'utr5', 'utr3')
+  labels <- c("TTS", "rRNA", "Pseudo", "Promoters", "ncRNA", "Introns",
+              "Intergenic", "CDS", "5' UTR", "3' UTR")
+  if(isTRUE(dm3_basic)) {
+    tags <- c('TE', 'genicPiRNA', 'nonGenicPiRNA', 'rRNA', 'tRNA', '3u', '5u',
+              'exon', 'intron', 'igr')
+    labels <- c('TE', 'piRNA', 'nongenic-piRNA', 'rRNA', 'tRNA', "3' UTR", "5' UTR",
+                "Exon", "Intron", "Intergenic")
+  }
+  df1 <- do.call("rbind", da) %>%
+    dplyr::filter(type %in% tags) %>%
+    dplyr::mutate(type = plyr::mapvalues(type, from = tags, to = labels,
+                                         warn_missing = FALSE)) %>%
+    dplyr::mutate(type = factor(type, levels = labels))
+    # do.call("rbind", da) %>%
+    # dplyr::filter(! type %in% c("other", "others")) %>%
+    # dplyr::mutate(type = plyr::mapvalues(type, from = tags, to = labels,
+    #                                      warn_missing = FALSE)) %>%
+    # dplyr::mutate(type = factor(type, levels = labels))
+  return(df1)
+}
+
+
 
 
 
