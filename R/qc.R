@@ -19,7 +19,7 @@ QCBaseContent <- function(path, name) {
     stop("file not exists: base_content.txt, length_distribution.txt")
   }
 
-  ##----------------------------------------------------------------------------##
+  ##--------------------------------------------------------------------------##
   df <- read.table(f1, header = TRUE, sep = " ")
   df[is.na(df)] <- 0 # NA to 0
   df <- tidyr::gather(df, base, count, -position)

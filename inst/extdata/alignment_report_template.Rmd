@@ -38,7 +38,7 @@ print_df <- function(x){
   x %>%
   kableExtra::kable() %>%
   kableExtra::kable_styling() %>%
-  kableExtra::scroll_box(width = "100%", height = "400px")
+  kableExtra::scroll_box(width = "100%")
 }
 
 stat_files <- params$stat_files
@@ -49,6 +49,7 @@ stat_files <- params$stat_files
 
 ```{r map_stat1, fig.width = 8}
 ## for count table
+stat_files <- normalizePath(stat_files)
 df_stat <- map_stat_read(stat_files, origin = TRUE) %>%
   tidyr::gather(key = "group", value = "count", -c(id, total)) %>%
   # tidyr::gather(key = "group", value = "count", 2:8) %>%
@@ -69,7 +70,7 @@ Note:
 **unmap**, does not map to any given sequences
 
 
-```{r map_plot, fig.width = 10}
+```{r map_plot, fig.width = 10, fig.height = 20}
 df_plot <- map_stat_plot(stat_files, stat = "percentage")
 print(df_plot)
 ```

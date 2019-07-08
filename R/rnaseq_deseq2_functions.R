@@ -25,6 +25,8 @@ DESeq2_for_featureCounts <- function(x, organism = "dm3", outdir = "./",
                                      pvalue_cutoff = 0.05) {
   # read counts
   if(inherits(x, "data.frame")){
+    # sample name in colname
+    # gene name in rowname
     df_count <- x
   } else {
     df_count <- featureCountsReader(x, organism)
@@ -38,7 +40,8 @@ DESeq2_for_featureCounts <- function(x, organism = "dm3", outdir = "./",
   }
 
   # make pairs: Control vs experiment
-  g <- unique(gsub("_rep[1-9]$", "", names(df_reps), ignore.case = TRUE))
+  tags <- gsub("\\.\\d$|\\_\\d$", "", names(df_reps))
+  g <- unique(gsub("_rep[1-9]$", "", tags, ignore.case = TRUE))
   g_pairs <- combn(g, 2)
 
   # DE analysis
@@ -201,7 +204,8 @@ deseq2_run <- function(ma, coldata, outdir, pvalue_cutoff = 0.05) {
 
   # prepare experiment design
   countdata <- ma
-  smp <- unique(gsub("_rep[1-9]$", "", colnames(countdata), ignore.case = TRUE))
+  tags <- gsub("\\.\\d$|\\_\\d$", "", colnames(countdata))
+  smp <- unique(gsub("_rep[1-9]$", "", tags, ignore.case = TRUE))
   coldata <- design_example(ids = colnames(countdata), conditions = smp)
 
   # load matrix

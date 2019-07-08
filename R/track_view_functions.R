@@ -41,6 +41,21 @@
 #'
 
 
+#' te_rename
+#'
+#' rename the TE ids, from FBgn0000004_17.6 to 17.6
+#'
+te_rename <- function(x){
+  x_new <- x
+  if(inherits(x, "character")) {
+    if(all(grepl("_", x))) {
+      ma <- stringr::str_split(x, "_", simplify = TRUE)
+      x_new <- ma[, 2]
+    }
+  }
+  return(x_new)
+}
+
 
 #' read bigWig file as GRanges object
 #'
@@ -61,63 +76,61 @@
 #' @import dplyr
 #'
 #' @export
-#'
 bw_reader <- function(x, y = NULL, which = NULL, normalize.to.y = FALSE) {
   stopifnot(file.exists(x))
   stopifnot(endsWith(tolower(x), "bw") | endsWith(tolower(x), "bigwig"))
 
-  # pick a subset of bigWig file
   if (is.null(which)) {
-    # ip bigWig
-    gr_ip <- rtracklayer::import.bw(x)
-    bw <- list(ip = gr_ip)
+    # read entire bigWig file
+    # warning, large bigwig file
+    gr_x <- rtracklayer::import.bw(x)
+    bw   <- list(x = gr_x)
 
-    # input bigWig
-    if (! is.null(y)) {
+    # normalize to y
+    # operate "-"
+    if(inherits(y, "character") & isTRUE(normalize.to.y)) {
       stopifnot(file.exists(y))
       stopifnot(endsWith(tolower(x), "bw") | endsWith(tolower(x), "bigwig"))
-      gr_input <- rtracklayer::import.bw(y)
-      bw <- list(ip = gr_ip, input = gr_input)
-      # normalize to y
-      # operate "-"
-      if (isTRUE(normalize.to.y)) {
-        gr_norm <- trackViewer::GRoperator(gr_ip, gr_input, col = "score",
-                                           operator = "-")
-        bw <- list(ip = gr_ip, input = gr_input, norm = gr_norm)
-      }
+
+      gr_y <- rtracklayer::import.bw(y)
+      bw   <- list(x = gr_x, y = gr_y)
+
+      gr_norm <- trackViewer::GRoperator(gr_x, gr_y,
+                                         col = "score",
+                                         operator = "-")
+      bw   <- list(x = gr_x, y = gr_y, norm = gr_norm)
     }
-  } else {
-    stopifnot(is(which, "GRanges"))
+  } else if(is(which, "GRanges")) {
+    # read subset of bigWig
     # ip bigWig
-    gr_ip <- rtracklayer::import.bw(x, which = which)
-    bw <- list(gr_ip)
+    gr_x <- rtracklayer::import.bw(x, which = which)
+    bw   <- list(gr_x)
 
-    # input bigWig
-    if (! is.null(y)) {
+    # normalize to y
+    # operate GRoperator() "-"
+    if(inherits(y, "character") & isTRUE(normalize.to.y)) {
       stopifnot(file.exists(y))
       stopifnot(endsWith(tolower(x), "bw") | endsWith(tolower(x), "bigwig"))
-      gr_input <- rtracklayer::import.bw(y, which = which)
-      bw <- list(ip = gr_ip, input = gr_input)
-      # normalize to y
-      # operate "-"
-      if (isTRUE(normalize.to.y)) {
-        if (length(gr_ip) > 0) {
-          if (length(gr_input) > 0) {
-            gr_norm <- trackViewer::GRoperator(gr_ip, gr_input, col = "score",
-                                               operator = "-")
-          } else {
-            gr_norm <- gr_ip
-          }
-          bw <- list(ip = gr_ip, input = gr_input, norm = gr_norm)
+
+      gr_y <- rtracklayer::import.bw(y, which = which)
+      bw   <- list(x = gr_x, y = gr_y)
+
+      if(length(gr_x) > 0) {
+        if (length(gr_y) > 0) {
+          gr_norm <- trackViewer::GRoperator(gr_x, gr_y,
+                                             col = "score",
+                                             operator = "-")
         } else {
-          bw <- NULL
+          gr_norm <- gr_x
         }
+        bw <- list(x = gr_x, y = gr_y, norm = gr_norm)
+      } else {
+        bw <- NULL
       }
     }
   }
   return(bw)
 }
-
 
 
 #' read fa_size
@@ -140,38 +153,34 @@ fasize_reader <- function(x, to_GRanges = FALSE) {
   stopifnot(file.exists(x))
 
   # read file
-  df <- readr::read_delim(x, "\t", col_types = readr::cols(),
-                          col_names = FALSE) %>%
-    dplyr::select(1,2)
-  names(df) <- c("chr", "length")
+  df <- readr::read_delim(x, "\t", col_names = c("chr", "length"),
+                          col_types = readr::cols()) %>%
+    dplyr::mutate(start = 1, end = length, strand = "+") %>%
+    dplyr::select(chr, start, end, length, strand) %>%
+    dplyr::mutate(name = te_rename(chr)) # split name
 
-  # convert to BED format
-  df2 <- dplyr::mutate(df, start = 1, end = length, strand = "+") %>%
-    dplyr::select(chr, start, end, length, strand)
-
-  # for dm3 TEs, FBgn0000004_17.6, split
-  if (all(grepl("_", df2$chr))) {
-    df2 <- df2 %>%
-      tidyr::separate("chr", c("id", "name"), sep = "_", remove = FALSE) %>%
-      dplyr::select(chr, start, end, length, strand, name)
-  } else {
-    df2$name <- df2$chr
-  }
+  # # for dm3 TEs, FBgn0000004_17.6, split
+  # if (all(grepl("_", df2$chr))) {
+  #   df2 <- df2 %>%
+  #     tidyr::separate("chr", c("id", "name"), sep = "_", remove = FALSE) %>%
+  #     dplyr::select(chr, start, end, length, strand, name)
+  # } else {
+  #   df2$name <- df2$chr
+  # }
 
   # convert to GRanges
   if (isTRUE(to_GRanges)) {
-    out <- GenomicRanges::GRanges(seqnames = df2$chr,
-                                  ranges = IRanges::IRanges(start = df2$start,
-                                                            end   = df2$end,
-                                                            width = df2$length,
-                                                            names = df2$name),
-                                  strand = df2$strand)
+    out <- GenomicRanges::GRanges(seqnames = df$chr,
+                                  ranges = IRanges::IRanges(start = df$start,
+                                                            end   = df$end,
+                                                            width = df$length,
+                                                            names = df$name),
+                                  strand = df$strand)
   } else {
-    out <- df2
+    out <- df
   }
   return(out)
 }
-
 
 
 #' pick chromosome from GRanges
@@ -228,7 +237,6 @@ GRanges_seqname_picker <- function(x, g, exclude = FALSE) {
 }
 
 
-
 #' convert GRanges to data.frame
 #'
 #' expand ranges to 1-base contnet
@@ -276,7 +284,6 @@ GRanges_to_data.frame <- function(x) {
   }
   return(df_bp)
 }
-
 
 
 #' read bigWig files and return in data.frame format
@@ -383,7 +390,6 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
 }
 
 
-
 #' process pair-experiment files
 #' read bigWig files and return in data.frame format
 #'
@@ -405,7 +411,6 @@ chipseq_bw_parser <- function(ip_bw, fasize, input_bw = NULL, n = TRUE) {
 #' @import dplyr
 #'
 #' @export
-#'
 chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
                                ctl_input_bw = NULL, tre_input_bw = NULL,
                                ctl_label = NULL, tre_label = NULL,
@@ -422,19 +427,16 @@ chipseq_bw_parser2 <- function(ctl_ip_bw, tre_ip_bw, fasize,
 
   # determine how many seqnames to read from bigWig files
   chr_all <- fasize_reader(fasize, to_GRanges = TRUE)
+  hits <- NULL
   if (isTRUE(n)) {
     hits <- chr_all
   } else if (all(is.character(n))) {
-    # filt by chr names, for TE only
-    dfx <- tibble::rownames_to_column(as.data.frame(chr_all), "name")
-    stopifnot(all(c("seqnames", "name") %in% names(dfx)))
-    dfx_hits <- dplyr::filter(dfx, seqnames %in% n | name %in% n)
-    chr_hits <- as.character(droplevels(dfx_hits$seqnames))
-    hits     <- GRanges_seqname_picker(chr_all, g = chr_hits)
+    hitA <- names(chr_all) %in% n
+    hitB <- as.character(chr_all@seqnames) %in% n
+    hits <- chr_all[hitA | hitB, ]
   } else {
     stop("unknown type of argument, n=")
   }
-
   # checkpoint
   if (is.null(hits)) {
     stop("records not found in fasize, check n= option")
@@ -582,6 +584,109 @@ chipseq_bw_parser3 <- function(ctl_ip_bw, tre_ip_bw, fasize,
 
 
 
+
+
+
+
+
+#' process pair-experiment files
+#' one TE per page
+#' read bigWig files and return in data.frame format
+#'
+#' @param ctl_ip_bw list of bigWig files, control ip
+#'
+#' @param ctl_input_bw list of bigWig files, control input
+#'
+#' @param tre_ip_bw list of bigWig files, treatment ip
+#'
+#' @param tre_input_bw list of bigWig files, treatment input
+#'
+#' @param fasize the chromosome size file of the bigWig, tab separated
+#'
+#' @param n a list of chromosomes names to extract from the bigWig files,
+#'   default, TRUE, use all seqnames
+#'
+#' @param pdf_out logical, save the plots in pdf file
+#'
+#' @import dplyr
+#'
+#' @export
+#'
+chipseq_bw_parser4 <- function(ctl_ip_bw, tre_ip_bw, fasize,
+                               ctl_input_bw = NULL, tre_input_bw = NULL,
+                               ctl_label = NULL, tre_label = NULL,
+                               n = TRUE, pdf_out = NULL) {
+  stopifnot(length(ctl_ip_bw) == length(tre_ip_bw))
+
+  # pick chr
+  chr_gr  <- fasize_reader(fasize, to_GRanges = TRUE)
+  chr_all <- as.character(seqnames(chr_gr))
+  if(isTRUE(n)) {
+    chr_hit <- chr_all
+  } else {
+    chr_hit <- n
+  }
+
+  if(is.null(pdf_out)) {
+    # pdf_out <- as.character(glue::glue("ChIPseq.{ctl_label}.vs.{tre_label}.{n_chr}.{n_stage}.trackview.pdf"))
+    pdf_out <- getwd()
+  }
+
+  if(! dir.exists(pdf_out)) {
+    dir.create(pdf_out)
+  }
+
+  for(chr_n in chr_hit){
+    pdf_n_name <- paste0("trackview-", chr_n, ".pdf")
+    pdf_n      <- file.path(pdf_out, pdf_n_name)
+
+    # make plots for dual samples
+    plist <- lapply(seq_len(length(ctl_ip_bw)), function(i){
+      # stage
+      t1 <- stringr::str_match(ctl_ip_bw[i], "_(\\w+)_NSR")[1, 2]
+      t2 <- stringr::str_match(tre_ip_bw[i], "_(\\w+)_NSR")[1, 2]
+      stopifnot(t1 == t2)
+
+      # strand
+      direction <- basename(dirname(ctl_ip_bw[i]))
+
+      # read bw
+      df_dual <- chipseq_bw_parser2(ctl_ip_bw = ctl_ip_bw[i],
+                                    tre_ip_bw = tre_ip_bw[i],
+                                    fasize = fasize,
+                                    ctl_input_bw = ctl_input_bw[i],
+                                    tre_input_bw = tre_input_bw[i],
+                                    ctl_label = ctl_label,
+                                    tre_label = tre_label,
+                                    n = chr_n)
+      df <- df_dual[[1]]
+
+      # add stage
+      df$stage  <- t1
+      df$direction <- direction
+
+      # make plot
+      p <- coverage_plot_dual(df, title = "stage")
+
+      # return
+      return(p)
+    })
+
+    plot_n_pages(plist, nrow = 5, ncol = 2, pdf_out = pdf_n)
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
 #' choose theme for coverage plot
 #'
 #' @param x a integer, 1 for single coverage plot, 2 for overlay of
@@ -613,7 +718,6 @@ theme_picker <- function(x) {
     return(tm[[1]])
   }
 }
-
 
 
 #' generate coverage plot for single chromosome
@@ -686,7 +790,6 @@ coverage_plot_single <- function(data, fill.color = "orange",
 }
 
 
-
 #' generate coverage plot for dual samples
 #'
 #' @param data a data.frame contains position and coverage values, require
@@ -704,9 +807,11 @@ coverage_plot_single <- function(data, fill.color = "orange",
 #'
 #' @export
 #'
-coverage_plot_dual <- function(data, fill.color = c("orange", "red2"),
+coverage_plot_dual <- function(data,
+                               fill.color = c("orange", "red2"),
                                exclude.minus.scores = TRUE,
-                               y.scale.max = "auto") {
+                               y.scale.max = "auto",
+                               title = "name") {
   stopifnot(is.data.frame(data))
   stopifnot(all(c("sample", "name", "position", "score") %in% names(data)))
   stopifnot(length(fill.color) == 2)
@@ -731,6 +836,24 @@ coverage_plot_dual <- function(data, fill.color = c("orange", "red2"),
   # convert id_name to name
   if (grepl("_", n_names)) {
     n_names <- unlist(strsplit(n_names, "_"))[2]
+  }
+
+  if("stage" %in% colnames(data)) {
+    n_stage <- as.character(data$stage)[1]
+    if("direction" %in% colnames(data)) {
+      direction <- as.character(data$direction)[1]
+      n_stage <- paste0(n_stage, "_", direction)
+    }
+  } else {
+    n_stage <- "stage"
+  }
+
+  if(title == "name") {
+    plot_title = n_names
+  } else if(title == "stage") {
+    plot_title = n_stage
+  } else {
+    plot_title = n_chr
   }
 
   # number of samples
@@ -763,14 +886,13 @@ coverage_plot_dual <- function(data, fill.color = c("orange", "red2"),
                                 label.position = "right")) +
     scale_y_continuous(limits = c(0, y.max)) +
     ylab("base coverage [rpm]") +
-    ggtitle(n_names) +
+    ggtitle(plot_title) +
     scale_fill_manual(values = fill.color) +
     scale_color_manual(values = fill.color) +
     mytheme
 
   return(p2)
 }
-
 
 
 #' save multiple plots in one page
@@ -835,7 +957,6 @@ plot_n_pages <- function(plotlist = NULL, nrow = 2, ncol = 5,
   # return the pdf filename
   return(pdf_out)
 }
-
 
 
 # EOF

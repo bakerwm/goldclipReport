@@ -18,6 +18,8 @@
 #' @export
 DESeq2_publish_plot <- function(x, path_pdf,
                                 gene_labels = NULL, #c("nxf2", "piwi", "CG9754"),
+                                x_name = NULL,
+                                y_name = NULL,
                                 save2pdf = TRUE) {
   stopifnot(file.exists(x))
 
@@ -26,8 +28,8 @@ DESeq2_publish_plot <- function(x, path_pdf,
 
   # rename id FBgn0000001_te
   # convert to FB00000001 and te
-  id_tag <- sum(grepl("_", df$id)) / length(df$id)
-  if(id_tag == 1) {
+  id_tag <- sum(grepl("FBgn.*_", df$id)) / length(df$id)
+  if(ceiling(id_tag) == 1) {
     df <- df %>%
       tidyr::separate(id, into = c("name", "id"), sep = "_")
     df$name <- NULL
@@ -69,7 +71,7 @@ DESeq2_publish_plot <- function(x, path_pdf,
     if (! dir.exists(path_pdf)) {
       dir.create(path_pdf, showWarnings = FALSE, recursive = TRUE, mode = "0740")
     }
-    rpt_fname <- paste0("DESeq2.", x.name, "_vs_", y.name, ".publish.pdf")
+    rpt_fname <- paste0("DESeq2.", x.name, ".vs.", y.name, ".publish.pdf")
     rpt_file  <- file.path(path_pdf, rpt_fname)
     pdf(rpt_file, width = 6, height = 6, paper = "a4")
     print(cowplot::ggdraw(pg2))
@@ -397,6 +399,8 @@ plot_volcano <- function(data, data_sig = NULL, data_label = NULL) {
 
   p <- ggplot() +
     geom_vline(xintercept = 0, size = .6, color = "black") +
+    geom_vline(xintercept = c(-1, 1), size = .5, linetype = 2, color = "grey60") +
+    geom_hline(yintercept = 2, size = .5, linetype = 2, color = "grey60") +
     geom_point(mapping = aes(logFC, logPval),
                data    = data,
                color   = "grey70",

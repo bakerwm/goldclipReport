@@ -13,7 +13,7 @@
 map_stat_plot <- function(x, stat = "percentage") {
 
   if(inherits(x, "character")){
-    df <- map_stat_read(x)
+    df <- map_stat_read(x, origin = FALSE)
   } else if(inherits(x, "data.frame")) {
     df <- x
   } else {
@@ -82,8 +82,9 @@ map_stat_plot <- function(x, stat = "percentage") {
 map_stat_read <- function(x, origin = FALSE) {
 
   if(inherits(x, "character")) {
+    x <- normalizePath(x)
     dx <- lapply(x, function(f){
-      readr::read_delim(f, "\t", col_types = readr::cols())
+      readr::read_delim(f, ",", col_types = readr::cols())
     })
     df1 <- dplyr::bind_rows(dx)
   } else {
@@ -91,12 +92,11 @@ map_stat_read <- function(x, origin = FALSE) {
   }
 
   # default header
-  t1 <- c("genome_rRNA", "genome_unique", "genome_multiple", "spikein_rRNA",
-          "spikein_unique", "spikein_multi", "unmap")
-  t2 <- c("rRNA", "unique", "multiple", "rRNA.sp", "unique.sp", "multiple.sp", "unmap")
-  names(df1) <- plyr::mapvalues(names(df1), from = t1, to = t2, warn_missing = FALSE)
-  colnames(df1)[1] <- "id" # rename
-  df1 <- dplyr::arrange(df1, id) # arrange
+  header <- c("id", "total", "rRNA.u", "rRNA.m", "genome.u", "genome.m",
+                  "sp.rRNA.u", "sp.rRNA.m", "sp.genome.u", "sp.genome.m",
+                  "unmap")
+  colnames(df1) <- header
+  # df1 <- dplyr::arrange(df1, id) # arrange
 
   if(! isTRUE(origin)) {
     dfx <- df1 %>%
@@ -104,7 +104,7 @@ map_stat_read <- function(x, origin = FALSE) {
       tidyr::gather(key = "type", value = "count", -1) %>%
       dplyr::group_by(id) %>%
       dplyr::mutate(pct = count / sum(count) * 100)
-    if(all(t2 %in% dfx$type)) {
+    if(all(header %in% dfx$type)) {
       dfx <- dplyr::mutate(dfx, type = factor(type, levels = rev(t2)))
     } else {
       dfx <- dplyr::mutate(dfx, type = factor(type, levels = sort(unique(type))))
@@ -136,7 +136,7 @@ BedLenBarplot <- function(data) {
     mutate(id = as.character(id),
            length = as.numeric(length))
   # plot
-  p <- ggplot(dfy, aes(x = length, y = id, fill = id)) +
+  p <- ggplot(df, aes(x = length, y = id, fill = id)) +
     geom_density_ridges(scale = 2) + theme_ridges() +
     xlab("Length of peaks (nt)") + ylab(NULL) +
     theme(panel.grid = element_blank())
@@ -158,7 +158,7 @@ BedNumBarplot <- function(data) {
   # barplot for number of peaks
   # input: data.frame, <length> <count> <id>
   stopifnot(any(class(data) %in% "data.frame"))
-  stopifnot(all(c("id", "length", "count") %in% names(data)))
+  stopifnot(all(c("id", "count") %in% names(data)))
   # convert formats
   df <- dplyr::group_by(data, id) %>%
     dplyr::summarise(total = sum(count))
@@ -184,6 +184,69 @@ BedNumBarplot <- function(data) {
           axis.text.y  = element_text(color = "black", size = rel(1.2)))
   return(p)
 }
+
+
+
+#' numberBarplot
+#'
+#' barplot for numbers
+#'
+#' @param data data.frame of BED, contains length, count, id columns
+#'
+#' @import dplyr
+#' @import ggplot2
+#' @import scales
+#'
+#' @export
+numberBarplot <- function(data, million_fixed = TRUE) {
+  # barplot for number of peaks
+  # input: data.frame, <length> <count> <id>
+  # stopifnot(any(class(data) %in% "data.frame"))
+  stopifnot(inherits(data, "data.frame"))
+  stopifnot(all(c("id", "count") %in% names(data)))
+  # convert formats
+  df <- data %>%
+    dplyr::group_by(id) %>%
+    dplyr::summarise(total = sum(count)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(id = factor(id, levels = rev(sort(unique(id)))),
+                  label = scales::number(total, big.mark = ","))
+  # determine max
+  nmax <- 10^nchar(max(df$total) - 1)
+  ymax <- ceiling(max(df$total) / nmax) * nmax
+  # plot
+  # unit of y axis
+  if(isTRUE(million_fixed)) {
+    y_unit = 1e6
+  } else {
+    y_unit = nmax
+  }
+  p <- ggplot(df, aes(id, total, fill = total)) +
+    geom_bar(stat = "identity", color = "grey30", size = .5) +
+    geom_text(aes(label = label, # formatC(total, big.mark = TRUE),
+                  vjust = .5, hjust = -0.1)) +
+    scale_y_continuous(limits   = c(0, ymax),
+                       breaks   = seq(0, ymax, length.out = 5),
+                       labels   = seq(0, ymax / y_unit, length.out = 5),
+                       position = "right") +
+    # scale_fill_continuous(type = "gradient") +
+    scale_fill_gradient(low = "blue", high = "red") +
+    coord_flip() +
+    xlab(NULL) +
+    ylab(paste0("Number of counts (x", y_unit / 1e6, " Million)")) +
+    theme_bw() +
+    theme(panel.grid   = element_blank(),
+          panel.border = element_blank(),
+          plot.title   = element_text(color = "black", size = rel(1.5),
+                                      face = "bold", hjust = .5),
+          axis.line    = element_line(color = "black", size = .5),
+          axis.title   = element_text(color = "black", size = rel(1.2)),
+          axis.text.x  = element_text(color = "black", size = rel(1.2)),
+          axis.text.y  = element_text(color = "black", size = rel(1.2)))
+
+  return(p)
+}
+
 
 
 #' BedAnnoBarplot

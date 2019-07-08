@@ -1,0 +1,133 @@
+---
+title: "Demultiplexing report"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+    toc: true
+    toc_depth: 2
+    highlight: github
+    df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+params:
+  demx_path: ""
+---
+
+
+```{r global_options, include=FALSE}
+suppressPackageStartupMessages(library(goldclipReport))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(kableExtra))
+
+knitr::opts_chunk$set(fig.width = 12, 
+                      fig.height = 8, 
+                      fig.path = 'Figs/',
+                      echo = FALSE,
+                      eval = TRUE,
+                      cache = FALSE,
+                      prompt = FALSE,
+                      tidy = FALSE,
+                      comment = NA,
+                      message = FALSE,
+                      warning = FALSE,
+                      rownames.print = FALSE)
+options(width=150)
+
+print_df <- function(x){
+  x %>%
+  kableExtra::kable() %>%
+  kableExtra::kable_styling() %>%
+  kableExtra::scroll_box(width = "100%", height = "400px")
+}
+
+demx_path <- params$demx_path
+
+```
+
+## 1. Summary
+
+```{r demx_summary, echo = FALSE}
+# demx_path  <- "/nas/yulab/seq_data/Yu_2019/YY35_20190325/results/"
+# demx_path  <- "/nas/yulab/seq_data/Yu_2019/YY39_20190528/results"
+df         <- demxParser(demx_path)
+total      <- sum(df$count)
+undemx     <- df %>% 
+  dplyr::filter(id == "undemx") %>% 
+  pull(count)
+undemx_pct <- round((undemx / total) * 100, 2)
+demx       <- total - undemx
+demx_pct   <- 100 - undemx_pct
+n_samples  <- nrow(df) - 1
+total      <- scales::number(total, big.mark = ",")
+demx       <- scales::number(demx, big.mark = ",")
+undemx     <- scales::number(undemx, big.mark = ",")
+
+summary_text <- glue::glue("{total} reads were generated from this Lane; \n{demx} ({demx_pct}%)  of the reads were demultiplexed for {n_samples} samples; \n{undemx} ({undemx_pct}%) of the reads were not assigned for any of the samples. ")
+
+```
+
+
+```{r summary_text,}
+print(summary_text)
+```
+
+
+## 2. Number of reads
+
+```{r table_reads}
+df_print <- df %>%
+  tibble::rowid_to_column("num") %>%
+  dplyr::mutate(count = scales::number(count, big.mark = ","))
+
+# print_df(df_print)
+kable(df_print) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## 3. Plot
+
+```{r plot_reads}
+p <- numberBarplot(df)
+print(p)
+```
+
+
+## 4. Bacteria content
+
+In order to check the bacteria content in each sample, [Kraken2](https://ccb.jhu.edu/software/kraken2/) was used to map sequencing reads to NCBI database: (bacteria, Archaea, Virus and Homo sapiens).
+
+The number of reads for each category were normalized by RPM, log10(RPM) were shown in the following figure.
+
+```{r bacteria, echo = FALSE}
+bacteria_csv <- file.path(demx_path, "bacteria", "bacteria_content.csv")
+
+df <- read.csv(bacteria_csv) %>%
+  tibble::column_to_rownames("X")
+
+ma <- log10(df + 1)
+
+## make plot
+cc = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7,
+                                     name = "RdYlBu")))
+breaks = seq(0, 6, length.out = 100)
+
+# plot
+p <- pheatmap::pheatmap(ma,
+              silent = TRUE,
+              cluster_cols = FALSE,
+              color = cc(100),
+              breaks = breaks,
+              border_color = "grey40")
+```
+
+
+```{r bacteria_content}
+print(p)
+
+```
+
+

@@ -57,16 +57,54 @@ qc_path <- params$qc_path
 qc <- qc_aggregate(qc_path, progressbar = FALSE)
 qcgs <- qc_stats(qc)
 qcgs <- dplyr::mutate(qcgs, 
-               tot.seq = as.numeric(tot.seq) / 1e6,
+               tot.seq = as.numeric(tot.seq),
+               # tot.seq = as.numeric(tot.seq) / 1e6,
                pct.dup = paste0(pct.dup, '%'),
                pct.gc  = paste0(pct.gc, '%')) %>%
   dplyr::select(sample, tot.seq, pct.dup, pct.gc, seq.length)
-names(qcgs) <- c('Sample', 'Seqs (Million)', '% Dup', '% GC', 'Length (nt)')
-print_df(qcgs)
+names(qcgs) <- c('Sample', 'Reads', '% Dup', '% GC', 'Length (nt)')
+print_df(as.data.frame(qcgs))
+
 ```
 
 
-## 2. Distribution of Base Quality
+## 2. Number of reads
+
+```{r num_reads, }
+library(ggplot2)
+library(dplyr)
+
+nmax <- 10^(nchar(max(qcgs$Reads)) - 1)
+ymax <- ceiling(max(qcgs$Reads) / nmax) * nmax
+ymax <- ymax / 1e6
+
+p1 <- qcgs %>%
+  mutate(count = round(as.numeric(Reads) / 1e6, 2)) %>%
+  ggplot(aes(Sample, count)) +
+  geom_bar(stat = "identity", fill = "grey80", color = "black", size = .5) +
+  geom_text(aes(label = count), vjust = .5, hjust = -0.1) +
+  scale_x_discrete(limits = rev(unique(sort(qcgs$Sample)))) +
+  scale_y_continuous(limits = c(0, ymax),
+                     breaks = seq(0, ymax, length.out = 5),
+                     labels = seq(0, ymax, length.out = 5),
+                     position = "right") +
+  coord_flip() +
+  xlab(NULL) + 
+  ylab(paste0("Number of reads (Million)")) +
+  theme_bw() +
+  theme(panel.grid   = element_blank(),
+        panel.border = element_blank(),
+        plot.title   = element_text(color = "black", size = rel(1.5),
+                                    face = "bold", hjust = .5),
+        axis.line    = element_line(color = "black", size = .5),
+        axis.title   = element_text(color = "black", size = rel(1.2)),
+        axis.text.x  = element_text(color = "black", size = rel(1.2)),
+        axis.text.y  = element_text(color = "black", size = rel(1.2)))
+
+print(p1)
+```
+
+## 3. Distribution of Base Quality
 
 > From Illumina:
 
